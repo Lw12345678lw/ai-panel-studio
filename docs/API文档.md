@@ -58,7 +58,7 @@ POST /discussions/:id/generate-panel
 
 调用大模型生成主持人 + 专家阵容。
 
-**响应：** PanelMember[] 数组
+**响应：** PanelMember[] 数组（不含运行时状态；发言状态经 SSE `status_update` 事件实时推送）
 
 ### 5. 开始讨论
 
@@ -76,7 +76,7 @@ POST /discussions/:id/start
 GET /discussions/:id/panel
 ```
 
-**响应：** PanelMember[] 数组
+**响应：** PanelMember[] 数组（不含运行时状态；发言状态经 SSE `status_update` 事件实时推送）
 
 ### 7. 获取发言记录
 
@@ -84,7 +84,7 @@ GET /discussions/:id/panel
 GET /discussions/:id/messages
 ```
 
-**响应：** Message[] 数组（含关联的 panelMember 信息）
+**响应：** Message[] 数组（含关联的 panelMember 信息；每条含 `roundId` 指向所属轮次，可空）
 
 ### 8. 获取共识与分歧
 
@@ -92,7 +92,15 @@ GET /discussions/:id/messages
 GET /discussions/:id/consensus
 ```
 
-**响应：** ConsensusItem[] 数组
+**响应：** ConsensusItem[] 数组（含 `sourceMessageIds` 溯源字段，指向来源发言）
+
+### 9. 获取轮次列表
+
+```
+GET /discussions/:id/rounds
+```
+
+**响应：** Round[] 数组（按 seq 升序，含 question、status）
 
 ---
 

@@ -24,6 +24,22 @@ model Discussion {
   panelMembers PanelMember[]
   messages     Message[]
   consensus    ConsensusItem[]
+  rounds       Round[]
+}
+
+// 轮次（主持人抛出子问题 → 一批发言 → 收尾，作为共识提炼的边界）
+model Round {
+  id           String   @id @default(uuid())
+  discussionId String
+  seq          Int      // 第几轮，从 1 起
+  question     String?  // 主持人本轮抛出的子问题/串场语
+  status       String   @default("open") // open | closed
+  createdAt    DateTime @default(now())
+
+  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  messages   Message[]
+
+  @@unique([discussionId, seq])
 }
 
 // 嘉宾（主持人 + 专家）
@@ -36,11 +52,12 @@ model PanelMember {
   position     String
   stance       String
   color        String
-  status       String   @default("idle") // idle | preparing | speaking
   createdAt    DateTime @default(now())
 
   discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
   messages   Message[]
+
+  @@index([discussionId, createdAt])
 }
 
 // 发言记录
@@ -48,12 +65,17 @@ model Message {
   id            String      @id @default(uuid())
   discussionId  String
   panelMemberId String
+  roundId       String?     // 所属轮次（开场前可空）
   content       String
   type          String      @default("speech") // speech | internal | summary
   createdAt     DateTime    @default(now())
 
-  discussion  Discussion  @relation(fields: [discussionId], references: [id], onDelete: Cascade)
-  panelMember PanelMember @relation(fields: [panelMemberId], references: [id], onDelete: Cascade)
+  discussion     Discussion             @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  panelMember    PanelMember            @relation(fields: [panelMemberId], references: [id], onDelete: Cascade)
+  round          Round?                 @relation(fields: [roundId], references: [id], onDelete: SetNull)
+  consensusItems ConsensusItemMessage[]
+
+  @@index([discussionId, createdAt])
 }
 
 // 共识与分歧
@@ -65,5 +87,19 @@ model ConsensusItem {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  discussion     Discussion             @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  sourceMessages ConsensusItemMessage[]
+
+  @@index([discussionId, createdAt])
+}
+
+// 共识/分歧的来源发言（M:N，反幻觉溯源）
+model ConsensusItemMessage {
+  consensusItemId String
+  messageId       String
+
+  consensusItem ConsensusItem @relation(fields: [consensusItemId], references: [id], onDelete: Cascade)
+  message       Message       @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@id([consensusItemId, messageId])
 }
