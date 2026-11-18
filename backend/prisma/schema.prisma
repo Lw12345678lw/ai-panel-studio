@@ -1,0 +1,69 @@
+// This is your Prisma schema file,
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 讨论
+model Discussion {
+  id          String        @id @default(uuid())
+  topic       String
+  status      String        @default("waiting") // waiting | generating | ongoing | finished
+  expertCount Int           @default(4)
+  summary     String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  finishedAt  DateTime?
+
+  panelMembers PanelMember[]
+  messages     Message[]
+  consensus    ConsensusItem[]
+}
+
+// 嘉宾（主持人 + 专家）
+model PanelMember {
+  id           String   @id @default(uuid())
+  discussionId String
+  name         String
+  role         String   // host | expert
+  title        String
+  position     String
+  stance       String
+  color        String
+  status       String   @default("idle") // idle | preparing | speaking
+  createdAt    DateTime @default(now())
+
+  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  messages   Message[]
+}
+
+// 发言记录
+model Message {
+  id            String      @id @default(uuid())
+  discussionId  String
+  panelMemberId String
+  content       String
+  type          String      @default("speech") // speech | internal | summary
+  createdAt     DateTime    @default(now())
+
+  discussion  Discussion  @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  panelMember PanelMember @relation(fields: [panelMemberId], references: [id], onDelete: Cascade)
+}
+
+// 共识与分歧
+model ConsensusItem {
+  id           String   @id @default(uuid())
+  discussionId String
+  type         String   // consensus | divergence
+  content      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+}

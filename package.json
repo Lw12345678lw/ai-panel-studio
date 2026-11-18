@@ -1,0 +1,18 @@
+{
+  "name": "ai-panel-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI 圆桌讨论 Web App - AI Panel Studio",
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "build": "npm run build:backend && npm run build:frontend",
+    "prisma:generate": "cd backend && npm run prisma:generate",
+    "prisma:migrate": "cd backend && npm run prisma:migrate"
+  },
+  "keywords": ["ai", "panel", "discussion", "llm"],
+  "author": "",
+  "license": "MIT"
+}
