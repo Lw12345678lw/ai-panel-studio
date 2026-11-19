@@ -58,6 +58,8 @@ POST /discussions/:id/generate-panel
 
 调用大模型生成主持人 + 专家阵容。
 
+> **同步接口**：一次性调用、一次性返回，耗时约 10~25 秒，前端需 loading 态（动画 + 已等待秒数）。此阶段无真实事件流，不使用 SSE（SSE 仅用于演播厅的持续事件流）。
+
 **响应：** PanelMember[] 数组（不含运行时状态；发言状态经 SSE `status_update` 事件实时推送）
 
 ### 5. 开始讨论
