@@ -54,3 +54,6 @@ blob-report/
 AI-Panel-Studio-源码交付包.zip
 dev.db.backup
 .verify/
+
+# 邮件附件（临时，不进版本库）
+邮件附件/
