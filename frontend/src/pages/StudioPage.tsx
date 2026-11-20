@@ -1,69 +1,170 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ConsensusPanel } from '../components/studio/ConsensusPanel';
+import { PanelSeat } from '../components/studio/PanelSeat';
+import { StudioStatusPill } from '../components/studio/StudioStatusPill';
+import { TranscriptPanel } from '../components/studio/TranscriptPanel';
+import { useDiscussionStream } from '../hooks/useDiscussionStream';
+import { useStudioStore } from '../store/studioStore';
 
 export default function StudioPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
+  const load = useStudioStore((s) => s.load);
+  const start = useStudioStore((s) => s.start);
+  const setError = useStudioStore((s) => s.setError);
+  const phase = useStudioStore((s) => s.phase);
+  const discussion = useStudioStore((s) => s.discussion);
+  const members = useStudioStore((s) => s.members);
+  const transcriptCount = useStudioStore((s) => s.transcript.length);
+  const summary = useStudioStore((s) => s.summary);
+  const error = useStudioStore((s) => s.error);
+
+  const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    if (id) void load(id);
+  }, [id, load]);
+
+  // 讨论已 hydrate 且未结束时建连；start 之后 phase 变 ongoing，enabled 不变
+  useDiscussionStream(id, !!id && (phase === 'waiting' || phase === 'ongoing'));
+
+  const host = members.find((member) => member.role === 'host');
+  const expertCount = members.filter((member) => member.role === 'expert').length;
+  const hasPanel = !!host && expertCount >= 2;
+
+  const handleStart = async () => {
+    if (!hasPanel || starting) return;
+    setStarting(true);
+    await start();
+    setStarting(false);
+  };
+
+  if (!id) return null;
+
+  if (phase === 'idle' || phase === 'loading') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-gray-400">
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+        <span className="ml-3 text-sm">正在进入演播厅…</span>
+      </div>
+    );
+  }
+
+  if (phase === 'error') {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-950 px-6 text-center text-white">
+        <p className="text-lg font-semibold">加载失败</p>
+        <p className="max-w-md text-sm text-gray-400">
+          {error ?? '讨论不存在或网络异常'}
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => void load(id)}
+            className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium hover:bg-purple-500"
+          >
+            重试
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="rounded-lg border border-white/10 px-4 py-2 text-sm text-gray-300 hover:text-white"
+          >
+            返回首页
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      {/* 顶部栏 */}
-      <header className="border-b border-white/10 px-6 py-4 shrink-0">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
+    <div className="flex min-h-screen flex-col bg-slate-950 text-white">
+      <header className="shrink-0 border-b border-white/10 px-6 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
             <button
               onClick={() => navigate('/')}
               className="text-gray-400 hover:text-white"
+              aria-label="返回首页"
             >
               ←
             </button>
-            <div>
-              <h1 className="text-lg font-semibold">讨论话题（待接入）</h1>
-              <p className="text-xs text-gray-500">ID: {id}</p>
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-semibold">
+                {discussion?.topic ?? '讨论'}
+              </h1>
+              <p className="text-xs text-gray-500">
+                {hasPanel ? `${expertCount} 位专家 · 主持人 ${host?.name}` : '嘉宾尚未入场'}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-            <span className="text-sm text-gray-400">等待开始</span>
+
+          <div className="flex items-center gap-3">
+            <StudioStatusPill />
+            {phase === 'waiting' && (
+              <button
+                onClick={handleStart}
+                disabled={!hasPanel || starting}
+                className="rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-2 text-sm font-medium transition-all hover:from-purple-500 hover:to-pink-500 disabled:cursor-not-allowed disabled:from-gray-700 disabled:to-gray-700"
+              >
+                {starting ? '启动中…' : '开始讨论 →'}
+              </button>
+            )}
           </div>
         </div>
       </header>
 
-      {/* 主内容区 */}
-      <div className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
-        {/* 左侧 - Transcript 发言记录 */}
-        <div className="lg:col-span-2 bg-slate-900/50 rounded-2xl border border-white/5 p-6 flex flex-col min-h-0">
-          <h2 className="text-base font-semibold mb-4 shrink-0">发言记录</h2>
-          <div className="flex-1 overflow-y-auto space-y-4">
-            <div className="text-center text-gray-500 py-12 text-sm">
-              <p className="mb-2">🎬 演播厅已就绪</p>
-              <p>确认嘉宾阵容后，讨论即将开始...</p>
-            </div>
-          </div>
+      {error && (
+        <div className="mx-auto mt-4 flex w-full max-w-7xl items-center justify-between gap-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm text-rose-200">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="shrink-0 text-rose-300 hover:text-white">
+            关闭
+          </button>
         </div>
+      )}
 
-        {/* 右侧 - 嘉宾 + 共识 */}
-        <div className="flex flex-col gap-6 min-h-0">
-          {/* 嘉宾状态小窗 */}
-          <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-6 shrink-0">
-            <h2 className="text-base font-semibold mb-4">嘉宾席</h2>
-            <div className="space-y-3">
-              <div className="text-center text-gray-500 py-4 text-sm">
-                等待嘉宾入场...
-              </div>
-            </div>
+      <div className="mx-auto grid min-h-0 w-full max-w-7xl flex-1 grid-cols-1 gap-6 p-6 lg:grid-cols-3">
+        <section className="flex min-h-0 flex-col rounded-2xl border border-white/5 bg-slate-900/50 p-6 lg:col-span-2">
+          <div className="mb-4 flex shrink-0 items-center justify-between">
+            <h2 className="text-base font-semibold">发言记录</h2>
+            <span className="text-xs text-gray-500">{transcriptCount} 条</span>
           </div>
+          <TranscriptPanel />
+        </section>
 
-          {/* 共识与分歧 */}
-          <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-6 flex-1 flex flex-col min-h-0">
-            <h2 className="text-base font-semibold mb-4 shrink-0">共识与分歧</h2>
-            <div className="flex-1 overflow-y-auto">
-              <div className="text-center text-gray-500 py-4 text-sm">
-                讨论进行中实时更新
+        <aside className="flex min-h-0 flex-col gap-6">
+          <section className="shrink-0 rounded-2xl border border-white/5 bg-slate-900/50 p-6">
+            <h2 className="mb-4 text-base font-semibold">嘉宾席</h2>
+            {members.length === 0 ? (
+              <p className="py-4 text-center text-sm text-gray-500">等待嘉宾入场…</p>
+            ) : (
+              <div className="space-y-3">
+                {members.map((member) => (
+                  <PanelSeat key={member.id} member={member} />
+                ))}
               </div>
+            )}
+          </section>
+
+          <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/5 bg-slate-900/50 p-6">
+            <h2 className="mb-4 shrink-0 text-base font-semibold">共识与分歧</h2>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <ConsensusPanel />
             </div>
-          </div>
-        </div>
+          </section>
+        </aside>
       </div>
+
+      {phase === 'finished' && summary && (
+        <div className="mx-auto w-full max-w-7xl px-6 pb-6">
+          <section className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-6">
+            <h2 className="mb-3 text-base font-semibold text-purple-200">最终总结</h2>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-200">
+              {summary}
+            </p>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
