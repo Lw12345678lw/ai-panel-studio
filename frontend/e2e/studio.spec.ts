@@ -100,3 +100,73 @@ test.describe('演播厅确定性 E2E（seed 数据）', () => {
     await expect(page.getByRole('heading', { name: '全部讨论' })).toBeVisible();
   });
 });
+
+test.describe('发起讨论（mock API，不调用 LLM）', () => {
+  test('依次创建讨论、生成阵容，成功后进入对应演播厅', async ({ page }) => {
+    const calls: string[] = [];
+    let releasePanel!: () => void;
+    const panelGate = new Promise<void>((resolve) => {
+      releasePanel = resolve;
+    });
+
+    await page.route('**/api/discussions', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      calls.push('create');
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 'e2e-created-discussion' }),
+      });
+    });
+    await page.route('**/api/discussions/e2e-created-discussion/generate-panel', async (route) => {
+      calls.push('generate-panel');
+      await panelGate;
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify([]),
+      });
+    });
+
+    await page.goto('/create');
+    await page.getByLabel('讨论话题').fill('人工智能对市场的影响');
+    await page.getByRole('button', { name: '生成嘉宾阵容 →' }).click();
+
+    await expect(page.getByRole('button', { name: 'AI 正在生成嘉宾阵容...' })).toBeDisabled();
+    releasePanel();
+    await expect(page).toHaveURL(/\/studio\/e2e-created-discussion$/);
+    expect(calls).toEqual(['create', 'generate-panel']);
+  });
+
+  test('生成阵容失败时显示页面内错误，并允许重试', async ({ page }) => {
+    await page.route('**/api/discussions', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 'e2e-created-discussion' }),
+      });
+    });
+    await page.route('**/api/discussions/e2e-created-discussion/generate-panel', async (route) => {
+      await route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: '模型暂时不可用' }),
+      });
+    });
+
+    await page.goto('/create');
+    await page.getByLabel('讨论话题').fill('人工智能对市场的影响');
+    await page.getByRole('button', { name: '生成嘉宾阵容 →' }).click();
+
+    await expect(page.getByRole('alert')).toContainText('创建讨论或生成嘉宾失败');
+    await expect(page).toHaveURL(/\/create$/);
+    await expect(page.getByRole('button', { name: '生成嘉宾阵容 →' })).toBeEnabled();
+  });
+});

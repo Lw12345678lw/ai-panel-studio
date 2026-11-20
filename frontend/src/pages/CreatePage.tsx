@@ -1,22 +1,32 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { discussionApi } from '../services/api';
+
+type SubmitStage = 'creating' | 'generating' | null;
 
 export default function CreatePage() {
   const [topic, setTopic] = useState('');
   const [expertCount, setExpertCount] = useState(4);
-  const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState<SubmitStage>(null);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
+  const loading = stage !== null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!topic.trim()) return;
+    if (!topic.trim() || loading) return;
 
-    setLoading(true);
-    // TODO: 接入后端 API
-    setTimeout(() => {
-      setLoading(false);
-      alert('功能开发中，后端接口待接入');
-    }, 1000);
+    setError('');
+    setStage('creating');
+    try {
+      const discussion = await discussionApi.create(topic.trim(), expertCount);
+      setStage('generating');
+      await discussionApi.generatePanel(discussion.id);
+      navigate(`/studio/${discussion.id}`);
+    } catch {
+      setError('创建讨论或生成嘉宾失败，请检查后端服务与 API 配置后重试。');
+      setStage(null);
+    }
   };
 
   return (
@@ -35,10 +45,11 @@ export default function CreatePage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* 话题输入 */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="discussion-topic" className="block text-sm font-medium text-gray-300 mb-2">
               讨论话题
             </label>
             <textarea
+              id="discussion-topic"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               placeholder="例如：人工智能对就业市场的长期影响"
@@ -65,14 +76,27 @@ export default function CreatePage() {
             </div>
           </div>
 
+          {error && (
+            <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+              {error}
+            </p>
+          )}
+
           {/* 提交按钮 */}
           <button
             type="submit"
             disabled={loading || !topic.trim()}
             className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed rounded-xl text-lg font-semibold transition-all"
           >
-            {loading ? '生成中...' : '生成嘉宾阵容 →'}
+            {stage === 'creating'
+              ? '创建讨论中...'
+              : stage === 'generating'
+                ? 'AI 正在生成嘉宾阵容...'
+                : '生成嘉宾阵容 →'}
           </button>
+          {stage === 'generating' && (
+            <p className="text-center text-sm text-gray-400">通常需要 3～25 秒，请保持页面打开。</p>
+          )}
         </form>
 
         {/* 示例话题 */}
