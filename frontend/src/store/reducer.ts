@@ -9,7 +9,14 @@ import type {
   SSEEvent,
 } from '../types';
 
-export type StudioPhase = 'idle' | 'loading' | 'waiting' | 'ongoing' | 'finished' | 'error';
+export type StudioPhase =
+  | 'idle'
+  | 'loading'
+  | 'waiting'
+  | 'generating'
+  | 'ongoing'
+  | 'finished'
+  | 'error';
 export type ConnectionState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed';
 
 export interface StudioState {
@@ -45,7 +52,7 @@ function phaseFromStatus(status: string): StudioPhase {
     case 'waiting':
       return 'waiting';
     case 'generating':
-      return 'loading';
+      return 'generating';
     case 'ongoing':
       return 'ongoing';
     case 'finished':

@@ -93,6 +93,12 @@ export function createDiscussionsRouter({ db, llm, hub, config }: DiscussionsRou
           }),
         ),
       );
+
+      // 生成完成后，仍处于 generating 的讨论回到 waiting，允许开始讨论
+      if (discussion.status === 'generating') {
+        await db.markPanelReady(id);
+      }
+
       res.status(201).json(members);
     } catch (e) {
       if (e instanceof PanelGenerationError) {

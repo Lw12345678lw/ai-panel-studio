@@ -92,6 +92,8 @@ export function TranscriptPanel() {
   const transcript = useStudioStore((s) => s.transcript);
   const members = useStudioStore((s) => s.members);
   const activeSpeakerId = useStudioStore((s) => s.activeSpeakerId);
+  const phase = useStudioStore((s) => s.phase);
+  const memberCount = useStudioStore((s) => s.members.length);
   const streamingLength = useStudioStore((s) =>
     s.activeSpeakerId ? (s.streamingText[s.activeSpeakerId]?.length ?? 0) : 0,
   );
@@ -108,11 +110,22 @@ export function TranscriptPanel() {
   }, [transcript.length, streamingLength, activeSpeakerId]);
 
   if (transcript.length === 0 && !activeSpeakerId) {
+    const hint =
+      memberCount === 0
+        ? phase === 'generating'
+          ? '正在生成嘉宾阵容，请稍候…'
+          : '尚未生成嘉宾阵容'
+        : phase === 'waiting'
+          ? '点击「开始讨论」，嘉宾即将入场'
+          : '等待讨论开始…';
+
     return (
       <div className="flex flex-1 items-center justify-center text-center text-sm text-gray-500">
         <div>
-          <p className="mb-2">🎬 演播厅已就绪</p>
-          <p>点击「开始讨论」，嘉宾即将入场</p>
+          <p className="mb-2">
+            {memberCount === 0 && phase === 'generating' ? '⏳ 嘉宾生成中' : '🎬 演播厅已就绪'}
+          </p>
+          <p>{hint}</p>
         </div>
       </div>
     );

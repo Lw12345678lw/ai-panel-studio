@@ -29,6 +29,9 @@ function describe(
   if (phase === 'finished') {
     return { label: '讨论已结束', dot: 'bg-purple-400', text: 'text-purple-300', pulse: false };
   }
+  if (phase === 'generating') {
+    return { label: '嘉宾生成中…', dot: 'bg-sky-400', text: 'text-sky-300', pulse: true };
+  }
   if (phase === 'waiting') {
     return { label: '等待开始', dot: 'bg-amber-400', text: 'text-amber-300', pulse: true };
   }

@@ -23,6 +23,8 @@ export interface AppDb extends DiscussionDb {
     stance: string;
     color: string;
   }): Promise<PanelMember>;
+  /** 阵容生成完成：generating → waiting（仅当仍处于 generating） */
+  markPanelReady(id: string): Promise<void>;
   /** 原子抢占：仅当 status=waiting 时置为 ongoing；返回是否抢占成功 */
   claimDiscussion(id: string): Promise<boolean>;
   /** 启动时收敛残留的 ongoing（进程重启后内存编排已丢失） */
@@ -74,6 +76,13 @@ export const appDb: AppDb = {
   createDiscussion: async (data) => prisma.discussion.create({ data }),
 
   createPanelMember: async (data) => prisma.panelMember.create({ data }),
+
+  markPanelReady: async (id) => {
+    await prisma.discussion.updateMany({
+      where: { id, status: 'generating' },
+      data: { status: 'waiting' },
+    });
+  },
 
   claimDiscussion: async (id) => {
     const result = await prisma.discussion.updateMany({
