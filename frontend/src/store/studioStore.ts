@@ -17,7 +17,7 @@ interface StudioActions {
   start(): Promise<void>;
   applyEvent(event: SSEEvent): void;
   setConnection(connection: ConnectionState): void;
-  clearError(): void;
+  setError(error: string | null): void;
 }
 
 export type StudioStore = StudioState & StudioActions;
@@ -66,7 +66,7 @@ export const useStudioStore = create<StudioStore>()((set, get) => ({
     set({ connection });
   },
 
-  clearError() {
-    set({ error: null });
+  setError(error) {
+    set({ error });
   },
 }));
