@@ -16,6 +16,8 @@
 GET /discussions
 ```
 
+按 `createdAt` 降序返回全部讨论；`summary` 截断到 100 字（超出部分以 `…` 结尾）。
+
 **响应示例：**
 ```json
 [

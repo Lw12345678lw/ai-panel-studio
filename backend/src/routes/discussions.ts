@@ -25,6 +25,13 @@ function sortMembers<T extends { role: string; createdAt: Date | string }>(membe
   });
 }
 
+const SUMMARY_LIMIT = 100;
+
+function truncateSummary(summary: string | null | undefined): string | null {
+  if (!summary) return null;
+  return summary.length > SUMMARY_LIMIT ? `${summary.slice(0, SUMMARY_LIMIT)}…` : summary;
+}
+
 export function createDiscussionsRouter({ db, llm, hub, config }: DiscussionsRouterDeps): Router {
   const router = Router();
   const heartbeatMs = config?.heartbeatMs ?? 15_000;
@@ -212,6 +219,24 @@ export function createDiscussionsRouter({ db, llm, hub, config }: DiscussionsRou
     };
     req.on('close', cleanup);
     res.on('error', cleanup);
+  });
+
+  // GET /api/discussions — 讨论列表（createdAt 降序，summary 截断 100 字）
+  router.get('/', async (_req, res) => {
+    const discussions = await db.listDiscussions();
+    const items = [...discussions]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map((discussion) => ({
+        id: discussion.id,
+        topic: discussion.topic,
+        status: discussion.status,
+        expertCount: discussion.expertCount,
+        createdAt: discussion.createdAt,
+        updatedAt: discussion.updatedAt,
+        finishedAt: discussion.finishedAt,
+        summary: truncateSummary(discussion.summary),
+      }));
+    res.json(items);
   });
 
   // GET /api/discussions/:id/members — 嘉宾列表（主持人优先）

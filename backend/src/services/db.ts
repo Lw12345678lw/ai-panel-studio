@@ -9,6 +9,7 @@ export type ConsensusWithSources = Prisma.ConsensusItemGetPayload<{
 }>;
 
 export interface AppDb extends DiscussionDb {
+  listDiscussions(): Promise<Discussion[]>;
   getPanelMembers(discussionId: string): Promise<PanelMember[]>;
   getMessages(discussionId: string): Promise<MessageWithMember[]>;
   getConsensus(discussionId: string): Promise<ConsensusWithSources[]>;
@@ -29,6 +30,9 @@ export interface AppDb extends DiscussionDb {
 }
 
 export const appDb: AppDb = {
+  listDiscussions: async () =>
+    prisma.discussion.findMany({ orderBy: { createdAt: 'desc' } }),
+
   getDiscussion: async (id) => prisma.discussion.findUnique({ where: { id } }),
 
   // orchestrator 只窄接口需要：role 收敛为 host | expert
