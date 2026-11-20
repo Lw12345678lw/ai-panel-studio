@@ -48,6 +48,33 @@ type FullSeed = {
   consensus: ConsensusSeed[];
 };
 
+async function createMembers(
+  discussionId: string,
+  members: MemberSeed[],
+  base: number,
+): Promise<Map<string, string>> {
+  const memberId = new Map<string, string>();
+  for (let i = 0; i < members.length; i++) {
+    const member = members[i];
+    const id = `${discussionId}-member-${member.key}`;
+    memberId.set(member.key, id);
+    await prisma.panelMember.create({
+      data: {
+        id,
+        discussionId,
+        name: member.name,
+        role: member.role,
+        title: member.title,
+        position: member.position,
+        stance: member.stance,
+        color: member.color,
+        createdAt: new Date(base + i * 1000),
+      },
+    });
+  }
+  return memberId;
+}
+
 async function seedFull(seed: FullSeed): Promise<void> {
   const base = new Date(seed.createdAt).getTime();
 
@@ -63,25 +90,7 @@ async function seedFull(seed: FullSeed): Promise<void> {
     },
   });
 
-  const memberId = new Map<string, string>();
-  for (let i = 0; i < seed.members.length; i++) {
-    const member = seed.members[i];
-    const id = `${seed.id}-member-${member.key}`;
-    memberId.set(member.key, id);
-    await prisma.panelMember.create({
-      data: {
-        id,
-        discussionId: seed.id,
-        name: member.name,
-        role: member.role,
-        title: member.title,
-        position: member.position,
-        stance: member.stance,
-        color: member.color,
-        createdAt: new Date(base + i * 1000),
-      },
-    });
-  }
+  const memberId = await createMembers(seed.id, seed.members, base);
 
   const hostId = memberId.get('host');
   if (!hostId) throw new Error(`seed ${seed.id} 缺少 host`);
@@ -377,17 +386,109 @@ const REMOTE_WORK: FullSeed = {
   ],
 };
 
-async function seedLite(): Promise<void> {
+// ===== 讨论 3：finished，完整 2 轮（由原轻量数据升级为真实结束的讨论）=====
+const AI_EDUCATION: FullSeed = {
+  id: 'seed-ai-education-finished',
+  topic: '高校该不该全面推行 AI 教学？',
+  status: 'finished',
+  expertCount: 4,
+  summary:
+    '讨论认为 AI 教学应作为基础工具全面引入，但必须保留人文与批判性思维课程；全面推行的前提是先解决师资培养与评价体系，否则会放大数字鸿沟，并让学生把判断权交给模型。',
+  createdAt: '2026-11-17T09:00:00.000Z',
+  finishedAt: '2026-11-17T09:30:00.000Z',
+  members: [
+    { key: 'host', role: 'host', name: '方致远', title: '高校教育观察者', position: '某教育媒体', stance: '中立控场，负责追问与串联', color: '#8B5CF6' },
+    { key: 'tang', role: 'expert', name: '唐墨', title: '教育技术学者', position: '某师范大学', stance: 'AI 应成为所有专业的基础工具课', color: '#3B82F6' },
+    { key: 'qin', role: 'expert', name: '秦岚', title: '人文教授', position: '某综合大学文学院', stance: '全面推行会把教育简化成工具训练', color: '#EC4899' },
+    { key: 'xu', role: 'expert', name: '许砚', title: '高校教务管理者', position: '某理工院校', stance: '全面推行先解决师资与评价体系', color: '#10B981' },
+    { key: 'jiang', role: 'expert', name: '蒋禾', title: '教育公平研究者', position: '某公益机构', stance: 'AI 教学会放大数字鸿沟', color: '#F59E0B' },
+  ],
+  rounds: [
+    {
+      seq: 1,
+      question: 'AI 应该作为所有专业的基础必修课吗？',
+      status: 'closed',
+      speeches: [
+        { member: 'tang', content: '我支持必修。AI 已经是通用生产力工具，不教学生用，等于放任他们在毕业时落后一个代际。' },
+        { member: 'qin', content: '我反对一刀切必修。工具课可以开，但把 AI 放进所有专业的必修表，会挤压人文与批判性思维的课时。' },
+        { member: 'xu', content: '从教务角度，必修不是问题，问题是师资。多数学校没有能力给所有专业配合格的 AI 教师。' },
+      ],
+    },
+    {
+      seq: 2,
+      question: '全面推行 AI 教学，最大的风险是什么？',
+      status: 'closed',
+      speeches: [
+        { member: 'jiang', content: '最大风险是数字鸿沟。资源好的学校能把 AI 教学做成个性化辅导，资源差的学校只能放几段视频。' },
+        { member: 'tang', content: '我补充一个风险：评价体系跟不上。如果考试还在考记忆，学生只会用 AI 应付作业。' },
+        { member: 'qin', content: '还有一个更隐蔽的风险：学生把判断权交给模型。教育的目标是让人会判断，而不是会提问。' },
+      ],
+    },
+  ],
+  consensus: [
+    {
+      type: 'consensus',
+      content: 'AI 工具能力应进入课程体系，这一点各方没有分歧。',
+      sourceMessageIds: [
+        'seed-ai-education-finished-round-1-msg-1',
+        'seed-ai-education-finished-round-1-msg-2',
+      ],
+    },
+    {
+      type: 'consensus',
+      content: '全面推行的关键约束是师资培养与评价体系。',
+      sourceMessageIds: [
+        'seed-ai-education-finished-round-1-msg-3',
+        'seed-ai-education-finished-round-2-msg-2',
+      ],
+    },
+    {
+      type: 'divergence',
+      content: '是否所有专业都应强制必修：唐墨支持，秦岚反对。',
+      sourceMessageIds: [
+        'seed-ai-education-finished-round-1-msg-1',
+        'seed-ai-education-finished-round-1-msg-2',
+      ],
+    },
+    {
+      type: 'divergence',
+      content: '最大风险是数字鸿沟还是判断权让渡：蒋禾强调公平，秦岚强调判断力。',
+      sourceMessageIds: [
+        'seed-ai-education-finished-round-2-msg-1',
+        'seed-ai-education-finished-round-2-msg-3',
+      ],
+    },
+  ],
+};
+
+// ===== 讨论 4：waiting，有阵容、无发言 =====
+const HOUSING_MEMBERS: MemberSeed[] = [
+  { key: 'host', role: 'host', name: '林知夏', title: '房产话题主持人', position: '某财经媒体', stance: '中立控场，负责追问与串联', color: '#8B5CF6' },
+  { key: 'fang', role: 'expert', name: '方既白', title: '城市经济学者', position: '某大学城市研究院', stance: '核心城市房产仍是抗通胀资产，但分化会加剧', color: '#EF4444' },
+  { key: 'shen', role: 'expert', name: '沈聿', title: '青年财务规划师', position: '某财富管理机构', stance: '租售比失衡，年轻人不应为买房牺牲流动性', color: '#10B981' },
+  { key: 'zhou', role: 'expert', name: '周予安', title: '社会学研究者', position: '某社科院', stance: '房子绑定公共资源，问题不在买不买而在公共品供给', color: '#3B82F6' },
+  { key: 'he', role: 'expert', name: '何嘉禾', title: '地产从业者', position: '某房企', stance: '政策底已现，刚需应尽早上车', color: '#F59E0B' },
+];
+
+async function seedWaitingWithPanel(): Promise<void> {
+  const id = 'seed-housing-waiting';
+  const base = new Date('2026-11-20T09:00:00.000Z').getTime();
+
   await prisma.discussion.create({
     data: {
-      id: 'seed-housing-waiting',
+      id,
       topic: '年轻人该不该买房？',
       status: 'waiting',
       expertCount: 4,
-      createdAt: new Date('2026-11-20T09:00:00.000Z'),
+      createdAt: new Date(base),
     },
   });
 
+  await createMembers(id, HOUSING_MEMBERS, base);
+}
+
+// ===== 讨论 5：generating（无阵容，用于演示生成中状态）=====
+async function seedGeneratingLite(): Promise<void> {
   await prisma.discussion.create({
     data: {
       id: 'seed-ev-generating',
@@ -397,19 +498,6 @@ async function seedLite(): Promise<void> {
       createdAt: new Date('2026-11-20T08:00:00.000Z'),
     },
   });
-
-  await prisma.discussion.create({
-    data: {
-      id: 'seed-ai-education-finished',
-      topic: '高校该不该全面推行 AI 教学？',
-      status: 'finished',
-      expertCount: 4,
-      summary:
-        '讨论认为 AI 教学应作为基础工具全面引入，但必须保留人文与批判性思维课程，避免把教育简化为工具训练。',
-      createdAt: new Date('2026-11-17T09:00:00.000Z'),
-      finishedAt: new Date('2026-11-17T09:30:00.000Z'),
-    },
-  });
 }
 
 async function main(): Promise<void> {
@@ -417,7 +505,9 @@ async function main(): Promise<void> {
 
   await seedFull(AI_JOBS);
   await seedFull(REMOTE_WORK);
-  await seedLite();
+  await seedFull(AI_EDUCATION);
+  await seedWaitingWithPanel();
+  await seedGeneratingLite();
 
   const discussions = await prisma.discussion.count({ where: { id: { in: SEED_IDS } } });
   const messages = await prisma.message.count({
