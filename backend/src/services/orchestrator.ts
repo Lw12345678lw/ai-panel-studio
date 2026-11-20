@@ -9,6 +9,7 @@ export interface Member {
   title?: string;
   position?: string;
   stance?: string;
+  color?: string;
 }
 
 export type RuntimeStatus = 'idle' | 'preparing' | 'speaking';
@@ -28,7 +29,14 @@ export interface LlmClient {
 }
 
 export interface DiscussionDb {
-  getDiscussion(id: string): Promise<{ id: string; topic: string; expertCount: number } | null>;
+  getDiscussion(id: string): Promise<{
+    id: string;
+    topic: string;
+    expertCount: number;
+    status?: string;
+    summary?: string | null;
+    finishedAt?: Date | null;
+  } | null>;
   getMembers(discussionId: string): Promise<Member[]>;
   createRound(data: { discussionId: string; seq: number; question: string }): Promise<{ id: string }>;
   closeRound(roundId: string): Promise<void>;
@@ -248,7 +256,7 @@ export async function runDiscussion(discussionId: string, deps: OrchestratorDeps
   ): Promise<{ id: string; content: string }> => {
     setStatus(member.id, 'preparing');
     setStatus(member.id, 'speaking');
-    emit({ type: 'speech_start', data: { panelMemberId: member.id } });
+    emit({ type: 'speech_start', data: { panelMemberId: member.id, panelMember: member } });
 
     const full = await withRetry(() =>
       llm.streamSpeech(messages, (chunk) => {
@@ -267,6 +275,18 @@ export async function runDiscussion(discussionId: string, deps: OrchestratorDeps
     setStatus(member.id, 'idle');
     emit({ type: 'speech_end', data: { panelMemberId: member.id, message } });
     return { id: message.id, content: full };
+  };
+
+  // 收尾事件必须带真实落库状态（status=finished / summary / finishedAt），
+  // 不能复用开场时的 discussion 快照。
+  const emitFinished = async () => {
+    let payload = discussion;
+    try {
+      payload = (await db.getDiscussion(discussionId)) ?? discussion;
+    } catch {
+      /* 读取失败则退回原快照 */
+    }
+    emit({ type: 'discussion_finished', data: { discussion: payload } });
   };
 
   emit({ type: 'discussion_started', data: { discussion } });
@@ -343,10 +363,11 @@ export async function runDiscussion(discussionId: string, deps: OrchestratorDeps
           type: item.type,
           content: item.content,
         });
-        for (const mid of matchSourcesToMessages(item.sources ?? [], roundMessages, members)) {
+        const sourceMessageIds = matchSourcesToMessages(item.sources ?? [], roundMessages, members);
+        for (const mid of sourceMessageIds) {
           await db.createConsensusSource({ consensusItemId: created.id, messageId: mid });
         }
-        items.push({ id: created.id, ...item });
+        items.push({ id: created.id, ...item, sourceMessageIds });
       }
       emit({ type: 'consensus_update', data: { items } });
     }
@@ -364,10 +385,10 @@ export async function runDiscussion(discussionId: string, deps: OrchestratorDeps
 
     await db.finishDiscussion(discussionId, summary.content);
     emit({ type: 'discussion_summary', data: { summary: summary.content } });
-    emit({ type: 'discussion_finished', data: { discussion } });
+    await emitFinished();
   } catch (e) {
     emit({ type: 'error', data: { message: e instanceof Error ? e.message : String(e) } });
     await db.finishDiscussion(discussionId, '讨论因错误提前结束');
-    emit({ type: 'discussion_finished', data: { discussion } });
+    await emitFinished();
   }
 }
