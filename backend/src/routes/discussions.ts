@@ -286,6 +286,18 @@ export function createDiscussionsRouter({ db, llm, hub, config }: DiscussionsRou
     );
   });
 
+  // GET /api/discussions/:id/rounds — 轮次列表（seq 升序）
+  router.get('/:id/rounds', async (req, res) => {
+    const { id } = req.params;
+    const discussion = await db.getDiscussion(id);
+    if (!discussion) {
+      res.status(404).json({ error: '讨论不存在' });
+      return;
+    }
+    const rounds = await db.getRounds(id);
+    res.json([...rounds].sort((a, b) => a.seq - b.seq));
+  });
+
   // GET /api/discussions/:id — 讨论详情
   router.get('/:id', async (req, res) => {
     const discussion = await db.getDiscussion(req.params.id);

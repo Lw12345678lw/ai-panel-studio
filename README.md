@@ -123,7 +123,7 @@ ai-panel-studio/
 │   │   │   ├── sseHub.ts          # 进程内事件中枢（按讨论隔离 + history 回放）
 │   │   │   └── db.ts              # 应用层数据访问
 │   │   └── scripts/llm-smoke.ts   # LLM 连通性排查工具
-│   └── tests/                     # 66 项单元测试
+│   └── tests/                     # 69 项单元测试
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/                 # HomePage / CreatePage / StudioPage
@@ -133,7 +133,7 @@ ai-panel-studio/
 │   │   ├── services/              # api.ts / sse.ts
 │   │   └── types/                 # 前后端共享类型
 │   ├── tests/                     # 14 项 reducer 测试
-│   ├── e2e/                       # Playwright（7 条确定性 + 1 条 @slow）
+│   ├── e2e/                       # Playwright（9 条确定性 + 1 条 @slow）
 │   └── playwright.config.ts
 └── docs/
     ├── PRD.md                     # 产品需求
@@ -194,6 +194,7 @@ Express 路由层  ── 原子抢占 waiting→ongoing（防重复启动）
 | GET | `/api/discussions/:id/members` | 嘉宾列表（主持人优先） |
 | GET | `/api/discussions/:id/messages` | 发言记录（升序） |
 | GET | `/api/discussions/:id/consensus` | 共识与分歧（含 sourceMessageIds） |
+| GET | `/api/discussions/:id/rounds` | 轮次列表（按 seq 升序） |
 | GET | `/api/discussions/:id/stream` | **SSE** 事件流 |
 
 完整契约（含 SSE 事件类型、`Last-Event-ID` 回放、心跳、状态码）见 `docs/API文档.md`。
@@ -202,7 +203,7 @@ Express 路由层  ── 原子抢占 waiting→ongoing（防重复启动）
 
 ## 测试
 
-### 后端单元测试（66 项）
+### 后端单元测试（69 项）
 
 ```bash
 cd backend && npm test
@@ -224,11 +225,11 @@ cd frontend && npm test
 ```bash
 cd frontend
 npx playwright install chromium   # 首次
-npm run test:e2e                  # 7 条确定性用例，基于 seed 数据，不调用 LLM
+npm run test:e2e                  # 9 条确定性用例，基于 seed 数据，不调用 LLM
 npm run test:e2e:slow             # @slow：真实跑一场 2 专家讨论（需 API 余额，2~4 分钟）
 ```
 
-E2E 设计原则：**默认用例绝不调用大模型**——真实 LLM 慢、花钱、结果不确定，会让测试不可靠。默认 7 条覆盖首页列表、三种状态的演播厅渲染、刷新恢复、404 页；真实全链路单独标记 `@slow`，手动触发。
+E2E 设计原则：**默认用例绝不调用大模型**——真实 LLM 慢、花钱、结果不确定，会让测试不可靠。默认 9 条覆盖首页列表、三种状态的演播厅渲染、刷新恢复、404 页、发起讨论的成功与失败路径；真实全链路单独标记 `@slow`，手动触发。
 
 ---
 

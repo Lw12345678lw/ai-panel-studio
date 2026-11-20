@@ -36,6 +36,12 @@ function makeDb() {
     { id: 'c1', discussionId: 'd1', type: 'consensus', content: '先', createdAt: new Date('2026-01-01T00:00:06Z'), updatedAt: new Date('2026-01-01T00:00:06Z'), sourceMessages: [{ consensusItemId: 'c1', messageId: 'm1' }, { consensusItemId: 'c1', messageId: 'm2' }] },
   ];
 
+  // 故意乱序：验证按 seq 升序
+  const rounds = [
+    { id: 'r2', discussionId: 'd1', seq: 2, question: '第二轮问题', status: 'open', createdAt: new Date('2026-01-01T00:01:00Z') },
+    { id: 'r1', discussionId: 'd1', seq: 1, question: '第一轮问题', status: 'closed', createdAt: new Date('2026-01-01T00:00:30Z') },
+  ];
+
   return {
     db: {
       getDiscussion: vi.fn(async (id: string) => (id === 'd1' ? { ...discussion } : null)),
@@ -43,6 +49,7 @@ function makeDb() {
       getPanelMembers: vi.fn(async () => members),
       getMessages: vi.fn(async () => messages),
       getConsensus: vi.fn(async () => consensus),
+      getRounds: vi.fn(async () => rounds),
       claimDiscussion: vi.fn(async () => false),
       createDiscussion: vi.fn(),
       createPanelMember: vi.fn(),
@@ -176,5 +183,35 @@ describe('GET /api/discussions/:id/consensus', () => {
     expect(body[0].sourceMessageIds).toEqual(['m1', 'm2']);
     expect(body[1].sourceMessageIds).toEqual(['m2']);
     expect(body[0].sourceMessages).toBeUndefined();
+  });
+});
+
+describe('GET /api/discussions/:id/rounds', () => {
+  it('不存在 → 404', async () => {
+    const base = await startApp();
+    const res = await fetch(`${base}/api/discussions/missing/rounds`);
+
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toBe('讨论不存在');
+  });
+
+  it('空列表 → 200 []', async () => {
+    const { db } = makeDb();
+    db.getRounds.mockResolvedValueOnce([]);
+    const base = await startApp(db);
+    const res = await fetch(`${base}/api/discussions/d1/rounds`);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  it('按 seq 升序，含 question 与 status', async () => {
+    const base = await startApp();
+    const res = await fetch(`${base}/api/discussions/d1/rounds`);
+    const body = await res.json();
+
+    expect(body.map((r: any) => r.id)).toEqual(['r1', 'r2']);
+    expect(body[0].question).toBe('第一轮问题');
+    expect(body[1].status).toBe('open');
   });
 });
