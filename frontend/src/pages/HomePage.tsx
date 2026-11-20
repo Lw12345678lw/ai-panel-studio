@@ -46,6 +46,7 @@ function DiscussionCard({ discussion }: { discussion: Discussion }) {
 
   return (
     <button
+      data-testid="discussion-card"
       onClick={() => navigate(`/studio/${discussion.id}`)}
       className="group flex w-full flex-col rounded-2xl border border-white/10 bg-white/5 p-5 text-left backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-purple-500/40 hover:bg-white/[0.07]"
     >
@@ -54,6 +55,7 @@ function DiscussionCard({ discussion }: { discussion: Discussion }) {
           {discussion.topic}
         </h3>
         <span
+          data-testid="status-badge"
           className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] ${meta.badge}`}
         >
           <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />

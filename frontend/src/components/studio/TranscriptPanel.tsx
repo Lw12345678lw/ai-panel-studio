@@ -15,7 +15,7 @@ function MessageBubble({ message, member }: { message: Message; member?: PanelMe
   const isHost = member?.role === 'host';
 
   return (
-    <div className="flex gap-3">
+    <div data-testid="transcript-message" className="flex gap-3">
       <div
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
         style={{ backgroundColor: color }}

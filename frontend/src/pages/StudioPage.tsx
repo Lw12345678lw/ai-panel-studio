@@ -126,7 +126,10 @@ export default function StudioPage() {
       </header>
 
       {(phase === 'waiting' || phase === 'generating') && !hasPanel && (
-        <div className="mx-auto mt-4 flex w-full max-w-7xl items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+        <div
+          data-testid="panel-guidance"
+          className="mx-auto mt-4 flex w-full max-w-7xl items-center justify-between gap-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+        >
           <span>
             {phase === 'generating'
               ? '嘉宾阵容正在生成中，生成完成后即可开始讨论。'
@@ -201,7 +204,10 @@ export default function StudioPage() {
 
       {phase === 'finished' && summary && (
         <div className="mx-auto w-full max-w-7xl px-6 pb-6">
-          <section className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-6">
+          <section
+            data-testid="summary"
+            className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-6"
+          >
             <h2 className="mb-3 text-base font-semibold text-purple-200">最终总结</h2>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-200">
               {summary}

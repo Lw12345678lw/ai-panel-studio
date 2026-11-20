@@ -44,3 +44,8 @@ yarn-error.log*
 .parcel-cache/
 .vite/
 coverage/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/

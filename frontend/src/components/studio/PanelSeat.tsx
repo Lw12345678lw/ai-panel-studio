@@ -13,6 +13,7 @@ export function PanelSeat({ member }: { member: PanelMember }) {
 
   return (
     <div
+      data-testid="panel-seat"
       className={`rounded-2xl border border-white/5 bg-slate-900/60 p-4 transition-all duration-300 ${
         status === 'speaking' ? 'scale-[1.02]' : ''
       } ${status === 'preparing' ? 'animate-pulse' : ''}`}

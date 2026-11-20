@@ -49,6 +49,7 @@ function Group({
         {items.map((item) => (
           <li
             key={item.id}
+            data-testid="consensus-item"
             className={`rounded-r-lg border-l-2 bg-white/[0.03] px-3 py-2 ${toneClass.split(' ')[0]}`}
           >
             <p className="text-xs leading-relaxed text-gray-300">{item.content}</p>

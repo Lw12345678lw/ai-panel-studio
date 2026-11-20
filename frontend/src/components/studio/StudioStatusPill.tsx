@@ -7,7 +7,7 @@ export function StudioStatusPill() {
   const view = describe(phase, connection);
 
   return (
-    <div className="flex items-center gap-2">
+    <div data-testid="status-pill" className="flex items-center gap-2">
       <span
         className={`h-2 w-2 rounded-full ${view.dot} ${view.pulse ? 'animate-pulse' : ''}`}
       />
