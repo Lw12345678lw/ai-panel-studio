@@ -48,6 +48,7 @@ function buildSystemPrompt(expertCount: number): string {
     '要求：',
     '- 只输出 JSON 数组本身，第一个元素是主持人，其余是专家。',
     '- 颜色必须符合 #RRGGBB 正则（如 #3B82F6），且彼此不重复。',
+    '- 颜色必须选择明亮、高饱和度的颜色（如 #3B82F6、#10B981），禁止使用过深（如 #0F172A、#111111）或过浅（如 #FFFFFF、#F5F5F5）的颜色。',
     '- 不要输出 JSON 之外的任何文字。',
   ].join('\n');
 }
