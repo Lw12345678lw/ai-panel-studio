@@ -49,6 +49,7 @@ function buildSystemPrompt(expertCount: number): string {
     '- 只输出 JSON 数组本身，第一个元素是主持人，其余是专家。',
     '- 颜色必须符合 #RRGGBB 正则（如 #3B82F6），且彼此不重复。',
     '- 颜色必须选择明亮、高饱和度的颜色（如 #3B82F6、#10B981），禁止使用过深（如 #0F172A、#111111）或过浅（如 #FFFFFF、#F5F5F5）的颜色。',
+    '- 所有嘉宾的姓名必须互不相同，专家之间不能重名。',
     '- 不要输出 JSON 之外的任何文字。',
   ].join('\n');
 }
@@ -108,6 +109,12 @@ function validateAndNormalize(input: unknown, expertCount: number): GeneratedPan
     throw new PanelGenerationError(`专家数量应为 ${expertCount}，实际 ${experts.length}`);
   }
 
+  // 名字是选人阶段的兜底解析键，专家重名会导致「名字 → ID」映射歧义
+  const expertNames = experts.map((m) => m.name);
+  if (new Set(expertNames).size !== expertNames.length) {
+    throw new PanelGenerationError('专家名字重复，无法唯一识别发言人');
+  }
+
   return fixDuplicateColors(members);
 }
 
@@ -127,16 +134,31 @@ function fixDuplicateColors(members: GeneratedPanelMember[]): GeneratedPanelMemb
   });
 }
 
+const CONTENT_MAX_ATTEMPTS = 2; // 初始 1 次 + 内容性错误重试 1 次
+
 export async function generatePanel(
   topic: string,
   expertCount: number,
 ): Promise<GeneratedPanelMember[]> {
-  let parsed: unknown;
-  try {
-    parsed = await chatCompletion(buildMessages(topic, expertCount));
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new PanelGenerationError(`嘉宾生成失败：${msg}`);
+  let lastError: PanelGenerationError = new PanelGenerationError('嘉宾生成失败');
+
+  for (let attempt = 0; attempt < CONTENT_MAX_ATTEMPTS; attempt++) {
+    let parsed: unknown;
+    try {
+      parsed = await chatCompletion(buildMessages(topic, expertCount));
+    } catch (e) {
+      // 网络 / 超时 / JSON 解析错误由 chatCompletion 内部处理，这里不再做内容级重试
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new PanelGenerationError(`嘉宾生成失败：${msg}`);
+    }
+
+    try {
+      return validateAndNormalize(parsed, expertCount);
+    } catch (e) {
+      if (!(e instanceof PanelGenerationError)) throw e;
+      lastError = e; // 内容性错误（含专家重名）→ 重试
+    }
   }
-  return validateAndNormalize(parsed, expertCount);
+
+  throw lastError;
 }

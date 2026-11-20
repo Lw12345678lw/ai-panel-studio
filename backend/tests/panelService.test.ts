@@ -167,6 +167,18 @@ describe('generatePanel', () => {
     expect(err).toBeInstanceOf(PanelGenerationError);
   });
 
+  it('脏数据：两位专家同名 → 重试后仍失败 → 抛 PanelGenerationError', async () => {
+    const panel = makePanel(4);
+    panel[2].name = panel[1].name; // 两位专家重名
+    fetchMock.mockResolvedValue(makeEnvelope(JSON.stringify(panel)));
+
+    const err = await generatePanel('话题', 4).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(PanelGenerationError);
+    expect((err as Error).message).toMatch(/重名|重复/);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // 内容性错误重试 1 次
+  });
+
   it('脏数据：两人颜色重复 → 自动修复（从备用调色板分配未用色），修复后不重复', async () => {
     const panel = makePanel(4);
     panel[1].color = panel[0].color; // 让第 2 人与主持人颜色相同
