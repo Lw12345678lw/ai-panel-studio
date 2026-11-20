@@ -87,10 +87,11 @@ POST /discussions/:id/start
 ### 6. 获取嘉宾列表
 
 ```
-GET /discussions/:id/panel
+GET /discussions/:id/members
 ```
 
-**响应：** PanelMember[] 数组（不含运行时状态；发言状态经 SSE `status_update` 事件实时推送）
+**响应：** PanelMember[] 数组（主持人排首位，其余按 `createdAt` 升序；不含运行时状态，
+发言状态经 SSE `status_update` 事件实时推送）
 
 ### 7. 获取发言记录
 
@@ -98,7 +99,8 @@ GET /discussions/:id/panel
 GET /discussions/:id/messages
 ```
 
-**响应：** Message[] 数组（含关联的 panelMember 信息；每条含 `roundId` 指向所属轮次，可空）
+**响应：** Message[] 数组（按 `createdAt` 升序；含关联的 panelMember 信息；每条含 `roundId`
+指向所属轮次，可空）
 
 ### 8. 获取共识与分歧
 
@@ -106,7 +108,8 @@ GET /discussions/:id/messages
 GET /discussions/:id/consensus
 ```
 
-**响应：** ConsensusItem[] 数组（含 `sourceMessageIds` 溯源字段，指向来源发言）
+**响应：** ConsensusItem[] 数组（按 `createdAt` 升序；含 `sourceMessageIds` 溯源字段，
+由 `ConsensusItemMessage` join 行内联映射，指向来源发言）
 
 ### 9. 获取轮次列表
 

@@ -32,8 +32,8 @@ export const discussionApi = {
     request<Discussion>(`/discussions/${id}/start`, {
       method: 'POST',
     }),
-  getPanel: (id: string) =>
-    request<PanelMember[]>(`/discussions/${id}/panel`),
+  getMembers: (id: string) =>
+    request<PanelMember[]>(`/discussions/${id}/members`),
   getMessages: (id: string) =>
     request<Message[]>(`/discussions/${id}/messages`),
   getConsensus: (id: string) =>

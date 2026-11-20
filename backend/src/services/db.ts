@@ -1,10 +1,17 @@
 // db.ts — 应用层数据访问：同时满足 orchestrator 的 DiscussionDb 与路由层需求。
-import type { Discussion, PanelMember } from '@prisma/client';
+import type { Discussion, PanelMember, Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import type { DiscussionDb, Member } from './orchestrator';
 
+export type MessageWithMember = Prisma.MessageGetPayload<{ include: { panelMember: true } }>;
+export type ConsensusWithSources = Prisma.ConsensusItemGetPayload<{
+  include: { sourceMessages: true };
+}>;
+
 export interface AppDb extends DiscussionDb {
   getPanelMembers(discussionId: string): Promise<PanelMember[]>;
+  getMessages(discussionId: string): Promise<MessageWithMember[]>;
+  getConsensus(discussionId: string): Promise<ConsensusWithSources[]>;
   createDiscussion(data: { topic: string; expertCount: number }): Promise<Discussion>;
   createPanelMember(data: {
     discussionId: string;
@@ -45,6 +52,20 @@ export const appDb: AppDb = {
 
   getPanelMembers: async (discussionId) =>
     prisma.panelMember.findMany({ where: { discussionId }, orderBy: { createdAt: 'asc' } }),
+
+  getMessages: async (discussionId) =>
+    prisma.message.findMany({
+      where: { discussionId },
+      orderBy: { createdAt: 'asc' },
+      include: { panelMember: true },
+    }),
+
+  getConsensus: async (discussionId) =>
+    prisma.consensusItem.findMany({
+      where: { discussionId },
+      orderBy: { createdAt: 'asc' },
+      include: { sourceMessages: true },
+    }),
 
   createDiscussion: async (data) => prisma.discussion.create({ data }),
 

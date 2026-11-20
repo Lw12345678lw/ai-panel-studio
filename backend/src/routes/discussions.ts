@@ -11,6 +11,20 @@ export interface DiscussionsRouterDeps {
   config?: { heartbeatMs?: number };
 }
 
+function sortByCreatedAt<T extends { createdAt: Date | string }>(rows: T[]): T[] {
+  return [...rows].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  );
+}
+
+// 主持人优先，其余按创建时间升序（稳定排序，时间相同保持 DB 顺序）
+function sortMembers<T extends { role: string; createdAt: Date | string }>(members: T[]): T[] {
+  return [...members].sort((a, b) => {
+    if (a.role !== b.role) return a.role === 'host' ? -1 : 1;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
+}
+
 export function createDiscussionsRouter({ db, llm, hub, config }: DiscussionsRouterDeps): Router {
   const router = Router();
   const heartbeatMs = config?.heartbeatMs ?? 15_000;
@@ -198,6 +212,57 @@ export function createDiscussionsRouter({ db, llm, hub, config }: DiscussionsRou
     };
     req.on('close', cleanup);
     res.on('error', cleanup);
+  });
+
+  // GET /api/discussions/:id/members — 嘉宾列表（主持人优先）
+  router.get('/:id/members', async (req, res) => {
+    const { id } = req.params;
+    const discussion = await db.getDiscussion(id);
+    if (!discussion) {
+      res.status(404).json({ error: '讨论不存在' });
+      return;
+    }
+    const members = await db.getPanelMembers(id);
+    res.json(sortMembers(members));
+  });
+
+  // GET /api/discussions/:id/messages — 发言记录（createdAt 升序，含 panelMember）
+  router.get('/:id/messages', async (req, res) => {
+    const { id } = req.params;
+    const discussion = await db.getDiscussion(id);
+    if (!discussion) {
+      res.status(404).json({ error: '讨论不存在' });
+      return;
+    }
+    const messages = await db.getMessages(id);
+    res.json(sortByCreatedAt(messages));
+  });
+
+  // GET /api/discussions/:id/consensus — 共识/分歧（含 sourceMessageIds）
+  router.get('/:id/consensus', async (req, res) => {
+    const { id } = req.params;
+    const discussion = await db.getDiscussion(id);
+    if (!discussion) {
+      res.status(404).json({ error: '讨论不存在' });
+      return;
+    }
+    const rows = sortByCreatedAt(await db.getConsensus(id));
+    res.json(
+      rows.map(({ sourceMessages, ...item }) => ({
+        ...item,
+        sourceMessageIds: sourceMessages.map((source) => source.messageId),
+      })),
+    );
+  });
+
+  // GET /api/discussions/:id — 讨论详情
+  router.get('/:id', async (req, res) => {
+    const discussion = await db.getDiscussion(req.params.id);
+    if (!discussion) {
+      res.status(404).json({ error: '讨论不存在' });
+      return;
+    }
+    res.json(discussion);
   });
 
   return router;
