@@ -129,3 +129,72 @@ export async function chatCompletion(
 
   throw lastError;
 }
+
+// 流式发言：fetch + ReadableStream 逐块解析 SSE，onChunk 回调增量内容，返回完整文本。
+// 注意：本方法只做单次请求，重试由调用方（orchestrator 的 withRetry）负责。
+export async function streamSpeech(
+  messages: ChatMessage[],
+  onChunk: (chunk: string) => void,
+  options: { timeoutMs?: number; temperature?: number } = {},
+): Promise<string> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const temperature = options.temperature ?? 0.7;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${API_KEY}`,
+      },
+      body: JSON.stringify({ model: MODEL, messages, temperature, stream: true }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const raw = await res.text();
+      throw new Error(`LLM API 返回 HTTP ${res.status}: ${raw.slice(0, 200)}`);
+    }
+
+    if (!res.body) {
+      throw new Error('LLM 响应缺少流式 body');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let full = '';
+
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+      buffer += decoder.decode(result.value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const data = trimmed.slice(5).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data) as { choices?: { delta?: { content?: string } }[] };
+          const delta = parsed?.choices?.[0]?.delta?.content;
+          if (typeof delta === 'string' && delta.length > 0) {
+            full += delta;
+            onChunk(delta);
+          }
+        } catch {
+          /* 忽略无法解析的流式行 */
+        }
+      }
+    }
+
+    return full;
+  } finally {
+    clearTimeout(timer);
+  }
+}
