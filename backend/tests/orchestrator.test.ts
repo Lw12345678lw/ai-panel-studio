@@ -15,12 +15,25 @@ import { runDiscussion } from '../src/services/orchestrator';
 interface Member {
   id: string;
   role: 'host' | 'expert';
+  name?: string;
 }
 
 function makeMembers(expertCount: number): Member[] {
   return [
     { id: 'host', role: 'host' },
     ...Array.from({ length: expertCount }, (_, i) => ({ id: `e${i + 1}`, role: 'expert' as const })),
+  ];
+}
+
+// 带名字的成员：用于「模型返回名字」的回归用例
+function makeNamedMembers(expertCount: number): Member[] {
+  return [
+    { id: 'host', role: 'host', name: '主持人' },
+    ...Array.from({ length: expertCount }, (_, i) => ({
+      id: `e${i + 1}`,
+      role: 'expert' as const,
+      name: `专家${i + 1}`,
+    })),
   ];
 }
 
@@ -266,5 +279,84 @@ describe('runDiscussion', () => {
 
     expect(events.some((e) => e.type === 'error')).toBe(true);
     expect(events.at(-1)?.type).toBe('discussion_finished');
+  });
+});
+
+describe('选人容错与每轮最低发言人数', () => {
+  const expertMessagesIn = (db: any, roundId: string) =>
+    db.messages.filter((m: any) => m.roundId === roundId);
+
+  it('回归：第 2 轮选人返回名字 → 仍正常发言（2 条）', async () => {
+    const members = makeNamedMembers(2);
+    const db = makeDb(members);
+    const llm = makeLlm();
+    setupLlmDefaults(llm);
+    llm.selectSpeakers
+      .mockResolvedValueOnce({ speakers: ['e1', 'e2'] }) // 第 1 轮：ID
+      .mockResolvedValueOnce({ speakers: ['专家1', '专家2'] }) // 第 2 轮：名字
+      .mockResolvedValue({ speakers: [] });
+    const { emit } = makeEvents();
+
+    await runDiscussion('d1', { llm, db, emit });
+
+    expect(expertMessagesIn(db, 'round-2')).toHaveLength(2);
+  });
+
+  it('回归：某轮返回 [] → 仍按最低人数补足（2 条）', async () => {
+    const members = makeMembers(4);
+    const db = makeDb(members);
+    const llm = makeLlm();
+    setupLlmDefaults(llm);
+    llm.selectSpeakers
+      .mockResolvedValueOnce({ speakers: ['e1', 'e2'] })
+      .mockResolvedValueOnce({ speakers: [] })
+      .mockResolvedValue({ speakers: ['e1', 'e2'] });
+    const { emit } = makeEvents();
+
+    await runDiscussion('d1', { llm, db, emit });
+
+    expect(expertMessagesIn(db, 'round-2')).toHaveLength(2);
+  });
+
+  it('回归：某轮返回未知 ID → 仍按最低人数补足（2 条）', async () => {
+    const members = makeMembers(4);
+    const db = makeDb(members);
+    const llm = makeLlm();
+    setupLlmDefaults(llm);
+    llm.selectSpeakers
+      .mockResolvedValueOnce({ speakers: ['e1', 'e2'] })
+      .mockResolvedValueOnce({ speakers: ['ghost', 'nobody'] })
+      .mockResolvedValue({ speakers: ['e1', 'e2'] });
+    const { emit } = makeEvents();
+
+    await runDiscussion('d1', { llm, db, emit });
+
+    expect(expertMessagesIn(db, 'round-2')).toHaveLength(2);
+  });
+
+  it('回归：第 1 轮就返回名字 → 仍有发言（2 条）', async () => {
+    const members = makeNamedMembers(2);
+    const db = makeDb(members);
+    const llm = makeLlm();
+    setupLlmDefaults(llm);
+    llm.selectSpeakers.mockResolvedValue({ speakers: ['专家1', '专家2'] });
+    const { emit } = makeEvents();
+
+    await runDiscussion('d1', { llm, db, emit });
+
+    expect(expertMessagesIn(db, 'round-1')).toHaveLength(2);
+  });
+
+  it('基线：4 专家 4 轮 → 专家发言总数 >= 8', async () => {
+    const members = makeMembers(4);
+    const db = makeDb(members);
+    const llm = makeLlm();
+    setupLlmDefaults(llm);
+    const { emit } = makeEvents();
+
+    await runDiscussion('d1', { llm, db, emit });
+
+    const expertTotal = db.messages.filter((m: any) => Boolean(m.roundId)).length;
+    expect(expertTotal).toBeGreaterThanOrEqual(8);
   });
 });

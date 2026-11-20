@@ -85,12 +85,12 @@ function expertSystem(member: Member): string {
 }
 
 const SELECT_SYSTEM = [
-  '你是「AI 圆桌讨论」的调度者。根据当前子问题和现场 transcript，选出接下来最应该发言的 2~3 位专家。',
+  '你是「AI 圆桌讨论」的调度者。根据当前子问题和现场 transcript，选出接下来最应该发言的 2 位专家（专家少于 2 位时选全部）。',
   '',
   '规则：',
-  '- 同一轮内不要重复选同一专家。',
-  '- 优先选发言次数少、立场能碰撞的专家（各专家已发言次数见下方）。',
-  '- 只输出 JSON：{"speakers":["专家ID", ...]}，不要输出其他文字。',
+  '- 不要选主持人；同一轮内不要重复选同一专家。',
+  '- 优先选发言次数少、立场能碰撞的专家（各专家已发言次数见候选列表）。',
+  '- 只输出 JSON：{"speakers":["专家ID", ...]}；"speakers" 里只能填候选列表中方括号内的 UUID，禁止填专家名字，不要输出其他文字。',
 ].join('\n');
 
 const CONSENSUS_SYSTEM = [
@@ -120,6 +120,17 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+// 模型可能返回 UUID，也可能返回专家名字；两者都接受（名字解析是兜底，不是主契约）
+function resolveSpeaker(raw: string, experts: Member[]): Member | null {
+  const key = raw.trim();
+  if (!key) return null;
+  return (
+    experts.find((e) => e.id === key) ??
+    experts.find((e) => (e.name ?? '') === key) ??
+    null
+  );
+}
+
 function applyGuardrails(
   selected: string[],
   experts: Member[],
@@ -127,16 +138,46 @@ function applyGuardrails(
   totalRounds: number,
   speechCounts: Record<string, number>,
 ): string[] {
-  // 同轮去重：同一专家本轮最多被选中 1 次
-  const deduped = [...new Set(selected)].filter((id) => experts.some((e) => e.id === id));
+  if (experts.length === 0) return [];
+
+  const picked: string[] = [];
+  const unresolved: string[] = [];
+
+  for (const raw of selected) {
+    const member = resolveSpeaker(raw, experts);
+    if (!member) {
+      unresolved.push(String(raw));
+      continue;
+    }
+    // 同轮去重：同一专家本轮最多被选中 1 次
+    if (!picked.includes(member.id)) picked.push(member.id);
+  }
+
+  if (unresolved.length > 0) {
+    console.warn(`[orchestrator] 无法解析的发言人（已忽略）：${unresolved.join(', ')}`);
+  }
+
+  // 最低人数硬兜底：每轮至少 min(2, 专家数) 位，按已发言次数升序补（不再只在后半程生效）
+  const minSpeakers = Math.min(2, experts.length);
+  if (picked.length < minSpeakers) {
+    const candidates = experts
+      .filter((e) => !picked.includes(e.id))
+      .sort((a, b) => (speechCounts[a.id] ?? 0) - (speechCounts[b.id] ?? 0));
+    for (const candidate of candidates) {
+      if (picked.length >= minSpeakers) break;
+      picked.push(candidate.id);
+    }
+  }
+
   // 发言公平：进入后半程后，强制安排尚未发言的专家（防沉默）
   if (roundSeq > totalRounds / 2) {
     const silent = experts.filter(
-      (e) => (speechCounts[e.id] ?? 0) === 0 && !deduped.includes(e.id),
+      (e) => (speechCounts[e.id] ?? 0) === 0 && !picked.includes(e.id),
     );
-    if (silent.length > 0) deduped.push(silent[0].id);
+    if (silent.length > 0) picked.push(silent[0].id);
   }
-  return deduped;
+
+  return picked;
 }
 
 // 反向匹配：把模型输出的 sources（自然语言摘要，非 messageId）匹配回本轮具体 Message，
@@ -198,9 +239,18 @@ function buildExpertSpeech(topic: string, subQuestion: string, transcript: strin
   ].join('\n');
 }
 
-function buildSelection(topic: string, subQuestion: string, experts: Member[], transcript: string[]): string {
+function buildSelection(
+  topic: string,
+  subQuestion: string,
+  experts: Member[],
+  transcript: string[],
+  speechCounts: Record<string, number>,
+): string {
   const expertList = experts
-    .map((e) => `- [${e.id}] ${e.name ?? e.id}（立场：${e.stance ?? '—'}）`)
+    .map(
+      (e) =>
+        `- [${e.id}] ${e.name ?? e.id}（立场：${e.stance ?? '—'}；已发言 ${speechCounts[e.id] ?? 0} 次）`,
+    )
     .join('\n');
   return [
     `讨论话题：${topic}`,
@@ -323,7 +373,10 @@ export async function runDiscussion(discussionId: string, deps: OrchestratorDeps
         llm.selectSpeakers(
           [
             { role: 'system', content: SELECT_SYSTEM },
-            { role: 'user', content: buildSelection(discussion.topic, subQuestion, experts, transcript) },
+            {
+              role: 'user',
+              content: buildSelection(discussion.topic, subQuestion, experts, transcript, speechCounts),
+            },
           ],
           { ...speechCounts },
         ),
