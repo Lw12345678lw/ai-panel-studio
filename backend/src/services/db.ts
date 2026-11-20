@@ -83,9 +83,11 @@ export const appDb: AppDb = {
     return result.count === 1;
   },
 
+  // 启动收敛：重启后内存中的编排已丢失，把残留 ongoing 记为 finished。
+  // seed- 前缀是演示数据（含一场刻意 ongoing 的示例），不参与收敛。
   finishStaleOngoing: async () => {
     const result = await prisma.discussion.updateMany({
-      where: { status: 'ongoing' },
+      where: { status: 'ongoing', NOT: { id: { startsWith: 'seed-' } } },
       data: { status: 'finished', finishedAt: new Date() },
     });
     return result.count;
