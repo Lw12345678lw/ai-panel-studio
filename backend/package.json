@@ -11,6 +11,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "db:seed": "ts-node --transpile-only prisma/seed.ts",
+    "db:reset": "node -e \"for (const f of ['prisma/dev.db','prisma/dev.db-journal','prisma/dev.db-wal','prisma/dev.db-shm']) require('fs').rmSync(f,{force:true})\" && prisma migrate deploy && npm run db:seed",
     "test": "vitest run"
   },
   "keywords": [],
